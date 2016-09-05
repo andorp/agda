@@ -84,6 +84,7 @@ tokens :-
 <pragma_>   "COMPILED_EPIC"            { keyword KwCOMPILED_EPIC }
 <pragma_>   "COMPILED_EXPORT"          { keyword KwCOMPILED_EXPORT }
 <pragma_>   "COMPILED_JS"              { keyword KwCOMPILED_JS }
+<pragma_>   "COMPILED_PYTHON"          { keyword KwCOMPILED_PYTHON }
 <pragma_>   "COMPILED_TYPE"            { keyword KwCOMPILED_TYPE }
 <pragma_>   "COMPILED_UHC"             { keyword KwCOMPILED_UHC }
 <pragma_>   "HASKELL"                  { keyword KwHASKELL }
