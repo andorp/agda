@@ -1635,6 +1635,9 @@ defParameters _                                     = Nothing
 defJSDef :: Definition -> Maybe JSCode
 defJSDef = compiledJS . defCompiledRep
 
+defPythonDef :: Definition -> Maybe PythonCode
+defPythonDef = compiledPython . defCompiledRep
+
 defEpicDef :: Definition -> Maybe EpicCode
 defEpicDef = compiledEpic . defCompiledRep
 

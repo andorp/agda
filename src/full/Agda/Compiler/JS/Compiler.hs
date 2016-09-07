@@ -4,6 +4,7 @@ module Agda.Compiler.JS.Compiler where
 
 import Prelude hiding ( null, writeFile )
 import Control.Applicative
+import Control.Monad.Plus ( mplus )
 import Control.Monad.Reader ( liftIO )
 import Control.Monad.Trans
 import Data.List ( intercalate, genericLength, partition )
@@ -77,17 +78,26 @@ import Agda.Utils.Impossible ( Impossible(Impossible), throwImpossible )
 -- Entry point into the compiler
 --------------------------------------------------
 
+data CompileMode
+  = CompilePython
+  | CompileJS
+
+compileMode :: a -> a -> CompileMode -> a
+compileMode p j = \case
+  CompilePython -> p
+  CompileJS     -> j
+
 compilerMain :: Bool -> Interface -> TCM ()
 compilerMain python mainI = inCompilerEnv mainI $ do
   doCompile IsMain mainI $ \_ -> do
-    compile python
+    compile (if python then CompilePython else CompileJS)
   copyRTEModules
 
-compile :: Bool -> Interface -> TCM ()
-compile p i = do
+compile :: CompileMode -> Interface -> TCM ()
+compile mode i = do
   ifM uptodate noComp $ do
     yesComp
-    writeModule p =<< curModule
+    writeModule mode =<< curModule mode
   where
   uptodate = liftIO =<< (isNewerThan <$> outFile_ <*> ifile)
   ifile    = maybe __IMPOSSIBLE__ filePath <$>
@@ -194,20 +204,21 @@ insertAfter us e (f:fs) | otherwise = f : insertAfter (delete (expName f) us) e 
 -- Main compiling clauses
 --------------------------------------------------
 
-curModule :: TCM Module
-curModule = do
+curModule :: CompileMode -> TCM Module
+curModule mode = do
   m <- (jsMod <$> curMName)
   is <- map jsMod <$> (map fst . iImportedModules <$> curIF)
-  es <- catMaybes <$> (mapM definition =<< (sortDefs <$> curDefs))
+  es <- catMaybes <$> (mapM (definition mode) =<< (sortDefs <$> curDefs))
   return (Module m (reorder es))
 
-definition :: (QName,Definition) -> TCM (Maybe Export)
-definition (q,d) = do
+definition :: CompileMode -> (QName,Definition) -> TCM (Maybe Export)
+definition mode (q,d) = do
   (_,ls) <- global q
   d <- instantiateFull d
-  fmap (Export ls) <$> defn q ls (defType d) (defJSDef d) (theDef d)
+  (Export ls) <$$> defn q ls (defType d) (compileMode (defPythonDef d) (defJSDef d) mode) (theDef d)
 
-defn :: QName -> [MemberId] -> Type -> Maybe JSCode -> Defn -> TCM (Maybe Exp)
+-- TODO: Seperate python and Javascript code
+defn :: QName -> [MemberId] -> Type -> Maybe String -> Defn -> TCM (Maybe Exp)
 defn q ls t (Just e) Axiom =
   return $ Just $ PlainJS e
 defn q ls t Nothing Axiom =
@@ -341,13 +352,13 @@ literal LitMeta{}       = __IMPOSSIBLE__
 -- Writing out an ECMAScript module
 --------------------------------------------------
 
-writeModule :: Bool -> Module -> TCM ()
-writeModule p m = do
-  case p of
-    False -> do
+writeModule :: CompileMode -> Module -> TCM ()
+writeModule mode m = do
+  case mode of
+    CompileJS -> do
       out <- outFile (modName m)
       liftIO (writeFile out (JSPretty.pretty 0 0 m))
-    True  -> do
+    CompilePython -> do
       let out = undefined
       liftIO $ do
         createPythonModule (modName m)
